@@ -1,8 +1,11 @@
+#include "Haffman_tree.h"   // 或者其他合适的默认值
+
 #include <iostream>
+#include <memory>
 #include <ostream>
 #include <stdexcept>
-
-#include "Haffman_tree.h"
+std::shared_ptr<Haffman_tree::Haffman_node> Haffman_tree::root = nullptr;
+std::unordered_map<unsigned char, std::string> Haffman_tree::code_map;
 int main() {
   while (true) {
     try {
