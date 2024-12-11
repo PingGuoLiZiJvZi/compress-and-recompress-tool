@@ -26,7 +26,7 @@ std::streampos Haffman_tree::decode_single_file(std::filesystem::path const& rea
   if (!ifile) {
     throw std::runtime_error(" failed to read from compressed file in decompressing " + write_path.string() + "\n");
   }
-  std::cout << "succeeded to read from compressed file" << write_path.string() << std::endl;
+  std::wcout << L"succeeded to read from compressed file" << write_path.wstring() << std::endl;
   pos          = ifile.tellg();
   auto message = decode(ava_bit, code);
   ifile.close();
@@ -43,7 +43,7 @@ std::streampos Haffman_tree::decode_single_file(std::filesystem::path const& rea
   return pos;
 }
 void Haffman_tree::decompress_file(std::filesystem::path const& file_path, std::streampos pos) {
-  auto root_file                  = pre_order_file_name_[0];
+  auto root_file                  = pre_order_file_name_[0].substr(0, pre_order_file_name_[0].size() - 1);
   root_path_size_                 = root_file.size();
   root_path_                      = file_path.parent_path();
   auto new_path                   = file_path.parent_path() / root_file;
