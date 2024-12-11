@@ -1,4 +1,5 @@
 #include "Haffman_tree.h"
+#include <ios>
 std::streampos Haffman_tree::decode_single_file(std::filesystem::path const& read_path,
                                                 std::filesystem::path const& write_path,
                                                 std::streampos pos) {
@@ -31,7 +32,7 @@ std::streampos Haffman_tree::decode_single_file(std::filesystem::path const& rea
   auto message = decode(ava_bit, code);
   ifile.close();
 
-  std::ofstream ofile(write_path);
+  std::ofstream ofile(write_path,std::ios::binary);
   if (!ofile.is_open()) {
     throw std::runtime_error("failed to open target file" + write_path.string() + "\n");
   }
@@ -43,7 +44,12 @@ std::streampos Haffman_tree::decode_single_file(std::filesystem::path const& rea
   return pos;
 }
 void Haffman_tree::decompress_file(std::filesystem::path const& file_path, std::streampos pos) {
-  auto root_file                  = pre_order_file_name_[0].substr(0, pre_order_file_name_[0].size() - 1);
+  std::wstring root_file;
+  if (pre_order_file_name_[0][pre_order_file_name_[0].size() - 1] == L'/') {
+    root_file = pre_order_file_name_[0].substr(0, pre_order_file_name_[0].size() - 1);
+  } else {
+    root_file = pre_order_file_name_[0];
+  }
   root_path_size_                 = root_file.size();
   root_path_                      = file_path.parent_path();
   auto new_path                   = file_path.parent_path() / root_file;
