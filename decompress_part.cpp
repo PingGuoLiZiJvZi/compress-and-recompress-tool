@@ -66,11 +66,14 @@ void Haffman_tree::decompress_file(std::filesystem::path const& file_path, std::
   changed_root_path_after_repeat_ += extension.wstring();
   for (size_t i = 0; i < pre_order_file_name_.size(); i++) {
     auto temp_relative_path = changed_root_path_after_repeat_ + pre_order_file_name_[i].substr(root_path_size_);
-    auto temp_path          = root_path_ / temp_relative_path;
-    if (!temp_path.has_extension()) {
+
+    if (temp_relative_path[temp_relative_path.size() - 1] == L'/') {
+      temp_relative_path = temp_relative_path.substr(0, temp_relative_path.size() - 1);
+      auto temp_path     = root_path_ / temp_relative_path;
       std::filesystem::create_directory(temp_path);
     } else {
-      pos = decode_single_file(file_path, temp_path, pos);
+      auto temp_path = root_path_ / temp_relative_path;
+      pos            = decode_single_file(file_path, temp_path, pos);
     }
   }
 }
@@ -128,7 +131,7 @@ std::streampos Haffman_tree::read_haffman_tree_from_file(std::filesystem::path c
       new_record.node->right = temp_record2.node;
       record_queue_.push(new_record);
     }
-    root= record_queue_.top().node;
+    root = record_queue_.top().node;
     record_queue_.pop();
   }
   std::cout << "succeeded to rebuild haffman tree\n";

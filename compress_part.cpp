@@ -143,16 +143,16 @@ void Haffman_tree::write_trunked_code_to_file(std::filesystem::path const& file_
   std::ofstream ofile(file_path, std::ios::binary | std::ios::out);
   ofile.seekp(offset);
   if ((size_t)ofile.tellp() != offset) {
-    throw std::runtime_error( "something strange happened\n");
+    throw std::runtime_error("something strange happened\n");
   }
   ofile.write(reinterpret_cast<char const*>(&ava_bit), sizeof(uint8_t));
   size_t code_size = code.size();
   std::cout << std::endl;
-//  std::cout << "write data size:" << code_size << std::endl;
-//  std::cout << "write begin pos:" << ofile.tellp() << std::endl;
+  //  std::cout << "write data size:" << code_size << std::endl;
+  //  std::cout << "write begin pos:" << ofile.tellp() << std::endl;
   ofile.write(reinterpret_cast<char const*>(&code_size), sizeof(size_t));
   ofile.write(reinterpret_cast<char const*>(code.data()), code_size * sizeof(unsigned char));
-//  std::cout << "write end pos:" << ofile.tellp() << std::endl;
+  //  std::cout << "write end pos:" << ofile.tellp() << std::endl;
   if (ofile) {
     std::cout << "succeeded to write" << std::endl;
   } else {
@@ -254,12 +254,13 @@ std::vector<std::vector<unsigned char>> Haffman_tree::read_and_trunk_origin_file
 void Haffman_tree::build_tree_from_original_file(
     std::filesystem::path const& file_path,
     std::vector<std::future<std::unordered_map<unsigned char, uint64_t>>>& static_future_count) {
-  pre_order_file_name_.push_back(std::filesystem::relative(file_path, root_path_).wstring());
   if (std::filesystem::is_directory(file_path)) {
+    pre_order_file_name_.push_back(std::filesystem::relative(file_path, root_path_).wstring() + L'/');
     for (auto const& directory_entry : std::filesystem::directory_iterator{file_path}) {
       build_tree_from_original_file(directory_entry.path(), static_future_count);
     }
   } else {
+    pre_order_file_name_.push_back(std::filesystem::relative(file_path, root_path_).wstring());
     static_future_count.emplace_back(std::async(Haffman_tree::asynchronous_statistics, file_path));
   }
 }
