@@ -9,6 +9,7 @@
 #include <iosfwd>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <numeric>
 #include <queue>
 #include <stdexcept>
@@ -16,11 +17,14 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
-#include <vector> 
- static uint8_t const max_thread_num = 12;
-  static uint64_t const max_allowed_bites_in_one_thread     = static_cast<uint64_t>(36 ) * 1024* 1024;
+#include <vector>
+
+static uint8_t const max_thread_num                   = 12;
+static uint64_t const max_allowed_bites_in_one_thread = static_cast<uint64_t>(36) * 1024 * 1024;
+
 class Haffman_tree {
  public:
+  static std::mutex mtx;
   struct Haffman_node {
     unsigned char data                  = '\0';
     std::shared_ptr<Haffman_node> left  = nullptr;
@@ -47,8 +51,7 @@ class Haffman_tree {
   };
 
  private:
-
-  std::wstring extension_             = L".ipp";
+  std::wstring extension_ = L".ipp";
   static std::shared_ptr<Haffman_node> root;
   void show_code(std::shared_ptr<Haffman_node> node, std::string& code);
   void tree_ini();
@@ -66,9 +69,16 @@ class Haffman_tree {
     std::string code;
     init_hash_map(root, code);
   }
-  void build_tree_from_original_file(std::filesystem::path const& file_path,std::vector<std::future<std::unordered_map<unsigned char,uint64_t>>>&static_future_count);
-   void init_hash_map(
-      std::shared_ptr<Haffman_node> node, std::string& code);
+  static void write_origin_trunk_to_file(std::filesystem::path const& file_path,
+                                         size_t offset,
+                                         std::vector<unsigned char> const& message);
+  static std::vector<unsigned char> read_single_trunk(std::filesystem::path const& file_path,
+                                                      size_t offset,
+                                                      size_t file_size);
+  void build_tree_from_original_file(
+      std::filesystem::path const& file_path,
+      std::vector<std::future<std::unordered_map<unsigned char, uint64_t>>>& static_future_count);
+  void init_hash_map(std::shared_ptr<Haffman_node> node, std::string& code);
   std::streampos decode_single_file(std::filesystem::path const& read_path,
                                     std::filesystem::path const& write_path,
                                     std::streampos pos);

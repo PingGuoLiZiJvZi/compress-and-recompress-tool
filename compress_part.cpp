@@ -10,9 +10,11 @@
 #include <ios>
 #include <iosfwd>
 #include <iostream>
+#include <mutex>
 #include <numeric>
 #include <ostream>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -105,15 +107,19 @@ void Haffman_tree::write_single_file_code_to_file(
   }
   std::partial_sum(code_size_vec.begin(), code_size_vec.end(), offset_vec.begin());
   std::ofstream ofile(file_path, std::ios::binary | std::ios::app);
-  //auto pos = ofile.tellp();
-  //pos      = ofile.seekp(0, std::ios::end).tellp();
-  //std::cout << !ofile << std::endl;
+
   ofile.write(reinterpret_cast<char const*>(&thread_num), sizeof(uint8_t));
+  std::cout << "thread num: " << (int)thread_num << ' ';
+  //线程数+每块数据大小（最多2+每块有效位数+块数据（这样会不会显得数据有些冗余（雾（算了反正写着玩的
   //  pos = ofile.tellp();
-  for (int i = 0; i < 2 && i < thread_num; i++) {
+  for (size_t i = 0; i < code_size_vec.size(); i++) {
     ofile.write(reinterpret_cast<char const*>(&code_size_vec[i]), sizeof(size_t));
+    std::cout << "size: " << code_size_vec[i] << ' ';
     //  pos = ofile.tellp();
+    //                   test_ofile << std::to_string(int(code_size_vec[i]) )<< ' ';
   }
+  std::cout << std::endl;
+  //test_ofile << std::endl;
   auto pos           = ofile.tellp();
   auto global_offset = static_cast<std::size_t>(pos);
   for (auto& offset : offset_vec) {
@@ -131,6 +137,7 @@ void Haffman_tree::write_single_file_code_to_file(
         std::launch::async, Haffman_tree::write_trunked_code_to_file, file_path, offset_vec[i - 1], code_pair_vec[i]));
   }
   write_trunked_code_to_file(file_path, global_offset, code_pair_vec[0]);
+  //test_ofile << std::endl;
   for (auto& temp_future : future_vec) {
     temp_future.get();
   }
@@ -140,18 +147,27 @@ void Haffman_tree::write_trunked_code_to_file(std::filesystem::path const& file_
                                               std::pair<uint8_t, std::vector<unsigned char>> const& code_pair) {
   auto code    = code_pair.second;
   auto ava_bit = code_pair.first;
-  std::ofstream ofile(file_path, std::ios::binary | std::ios::out);
-  ofile.seekp(offset);
+  std::ofstream ofile(file_path, std::ios::binary | std::ios::ate);
+  //  std::ofstream test_ofile("C:\\Users\\30408\\Desktop\\英语\\压缩时写文件输出.txt", std::ios::app);
+  ofile.seekp(offset, std::ios::beg);
   if ((size_t)ofile.tellp() != offset) {
     throw std::runtime_error("something strange happened\n");
   }
-  ofile.write(reinterpret_cast<char const*>(&ava_bit), sizeof(uint8_t));
+
   size_t code_size = code.size();
-  std::cout << std::endl;
+  ofile.write(reinterpret_cast<char const*>(&ava_bit), sizeof(uint8_t));
+  mtx.lock();
+  std::cout << "ava_bit:" << (int)ava_bit << ' ';
+  std::cout << "code size:" << code_size << std::endl;
+  std::cout << "written ava_bit offset: " << size_t(ofile.tellp()) << std::endl;
+  mtx.unlock();
+  //test_ofile << std::to_string((int)ava_bit) << ' ';
+
   //  std::cout << "write data size:" << code_size << std::endl;
   //  std::cout << "write begin pos:" << ofile.tellp() << std::endl;
-  ofile.write(reinterpret_cast<char const*>(&code_size), sizeof(size_t));
+  //ofile.write(reinterpret_cast<char const*>(&code_size), sizeof(size_t));
   ofile.write(reinterpret_cast<char const*>(code.data()), code_size * sizeof(unsigned char));
+  //test_ofile <<std::to_string(int(code_size)) << ' ';
   //  std::cout << "write end pos:" << ofile.tellp() << std::endl;
   if (ofile) {
     std::cout << "succeeded to write" << std::endl;
@@ -228,9 +244,10 @@ std::vector<std::vector<unsigned char>> Haffman_tree::read_and_trunk_origin_file
   size_t first_size  = 0;
   std::vector<size_t> chunk_size;
   if (file_size < max_allowed_bites_in_one_thread * max_thread_num) {
-    thread_num = file_size / max_allowed_bites_in_one_thread + 1;
-    first_size = file_size - (thread_num - 1) * max_allowed_bites_in_one_thread;
-    chunk_size.resize(thread_num, max_allowed_bites_in_one_thread);
+    thread_num        = file_size / max_allowed_bites_in_one_thread + 1;
+    size_t every_size = file_size / thread_num;
+    first_size        = file_size - (thread_num - 1) * every_size;
+    chunk_size.resize(thread_num, every_size);
     chunk_size[0] = first_size;
   } else {
     size_t every_size = file_size / max_thread_num;

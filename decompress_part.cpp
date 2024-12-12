@@ -1,5 +1,67 @@
 #include "Haffman_tree.h"
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <future>
 #include <ios>
+#include <iostream>
+#include <mutex>
+#include <numeric>
+#include <ostream>
+#include <stdexcept>
+#include <vector>
+
+void Haffman_tree::write_origin_trunk_to_file(std::filesystem::path const& file_path,
+                                              size_t offset,
+                                              std::vector<unsigned char> const& message) {
+  std::ofstream ofile(file_path, std::ios::binary | std::ios::app);
+  ofile.seekp(offset, std::ios::beg);
+  if (!ofile.is_open()) {
+    throw std::runtime_error("failed to open target file" + file_path.string() + "\n");
+  }
+  ofile.write(reinterpret_cast<char const*>(message.data()), message.size() * sizeof(unsigned char));
+  std::cout << "a trunk written\n";
+  if (!ofile) {
+    throw std::runtime_error("failed to write target file" + file_path.string() + "\n");
+  }
+  ofile.close();
+}
+
+std::vector<unsigned char> Haffman_tree::read_single_trunk(
+    std::filesystem::path const& file_path,
+    size_t offset,
+    size_t file_size) {  //file size是经过计算后减去bit位的file——size
+  std::ifstream ifile(file_path, std::ios::binary | std::ios::in);
+  if (!ifile.is_open()) {
+    throw std::runtime_error("failed to open the file trunk\n");
+  }
+  ifile.seekg(offset, std::ios::beg);
+  auto pos        = ifile.tellg();
+  uint8_t ava_bit = 0;
+  ifile.read(reinterpret_cast<char*>(&ava_bit), sizeof(uint8_t));
+  if (!ifile) {
+    throw std::runtime_error("failed after read the bit");
+  }
+  std::vector<unsigned char> code;
+  code.resize(file_size);
+  ifile.read(reinterpret_cast<char*>(code.data()), file_size * sizeof(unsigned char));
+  mtx.lock();
+  std::cout << "ava_bit:" << (int)ava_bit << ' ';
+  std::cout << "code size:" << file_size << std::endl;
+  std::cout << "read ava_bit_pos:" << (size_t)ifile.tellg() << std::endl;
+  std::cout << "begin read pos:" << (size_t)pos << std::endl;
+  mtx.unlock();
+
+  if (!ifile) {
+    throw std::runtime_error(" failed to read from compressed file in decompressing " + file_path.string() + "\n");
+  }
+  ifile.close();
+  code = decode(ava_bit, code);
+  return code;
+}
 std::streampos Haffman_tree::decode_single_file(std::filesystem::path const& read_path,
                                                 std::filesystem::path const& write_path,
                                                 std::streampos pos) {
@@ -8,39 +70,54 @@ std::streampos Haffman_tree::decode_single_file(std::filesystem::path const& rea
     throw std::runtime_error("failed to read from compressed file\n");
   }
   ifile.seekg(pos);
-  uint8_t ava_bit  = 0;
-  size_t code_size = 0;
-  std::vector<unsigned char> code;
-  // auto temp_pos = ifile.tellg();
-  ifile.read(reinterpret_cast<char*>(&ava_bit), sizeof(uint8_t));
-  // temp_pos = ifile.tellg();
-  ifile.read(reinterpret_cast<char*>(&code_size), sizeof(size_t));
-  // temp_pos = ifile.tellg();
-  //   ifile.seekg(std::streamoff(pos) + sizeof(uint8_t) + sizeof(size_t),
-  //   std::ios::beg);
-  code.resize(code_size);
-  std::cout << "read data size:" << code_size << "\n";
-  // ifile.seekg(0, std::ios::end);
-  // std::cout << ifile.tellg() - pos << std::endl;
-  ifile.read(reinterpret_cast<char*>(code.data()), code_size * sizeof(unsigned char));
-
+  uint8_t thread_num = 0;
+  std::vector<size_t> code_size;
+  std::vector<std::vector<unsigned char>> result;
+  std::vector<std::future<std::vector<unsigned char>>> future_vec;
+  std::vector<size_t> offset;
+  ifile.read(reinterpret_cast<char*>(&thread_num), sizeof(uint8_t));
+  std::cout << "thread_num:" << (int)thread_num << ' ';
+  code_size.resize(thread_num);
+  offset.resize(thread_num);
+  for (size_t i = 0; i < thread_num; i++) {
+    ifile.read(reinterpret_cast<char*>(&code_size[i]), sizeof(size_t));
+  }
+  std::cout << std::endl;
+  std::partial_sum(code_size.begin(), code_size.end(), offset.begin());
+  for (auto& num : offset) {
+    num += ((size_t)pos + sizeof(uint8_t) + thread_num * sizeof(size_t));
+  }
+  for (auto& num : code_size) {
+    num -= sizeof(uint8_t);
+  }
+  for (int i = 1; i < thread_num; i++) {
+    future_vec.emplace_back(
+        std::async(std::launch::async, Haffman_tree::read_single_trunk, read_path, offset[i - 1], code_size[i]));
+  }
+  result.emplace_back(
+      read_single_trunk(read_path, (size_t)pos + sizeof(uint8_t) + thread_num * sizeof(size_t), code_size[0]));
+  for (auto& res : future_vec) {
+    result.emplace_back(res.get());
+  }
   if (!ifile) {
-    throw std::runtime_error(" failed to read from compressed file in decompressing " + write_path.string() + "\n");
+    throw std::runtime_error("failed to read file" + write_path.string());
   }
-  std::wcout << L"succeeded to read from compressed file" << write_path.wstring() << std::endl;
-  pos          = ifile.tellg();
-  auto message = decode(ava_bit, code);
+  ifile.seekg(offset[offset.size() - 1], std::ios::beg);
+  pos = ifile.tellg();
   ifile.close();
-
-  std::ofstream ofile(write_path,std::ios::binary);
-  if (!ofile.is_open()) {
-    throw std::runtime_error("failed to open target file" + write_path.string() + "\n");
+  for (int i = 0; i < thread_num; i++) {
+    code_size[i] = result[i].size();
   }
-  ofile.write(reinterpret_cast<char const*>(message.data()), message.size() * sizeof(unsigned char));
-  if (!ofile) {
-    throw std::runtime_error("failed to write target file" + write_path.string() + "\n");
+  std::partial_sum(code_size.begin(), code_size.end(), offset.begin());
+  std::vector<std::future<void>> void_future_vec;
+  for (int i = 1; i < thread_num; i++) {
+    void_future_vec.emplace_back(
+        std::async(std::launch::async, Haffman_tree::write_origin_trunk_to_file, write_path, offset[i - 1], result[i]));
   }
-  ofile.close();
+  write_origin_trunk_to_file(write_path, 0, result[0]);
+  for (auto& future : void_future_vec) {
+    future.get();
+  }
   return pos;
 }
 void Haffman_tree::decompress_file(std::filesystem::path const& file_path, std::streampos pos) {
@@ -176,4 +253,7 @@ void Haffman_tree::decompress_file(std::filesystem::path const& file_path) {
   auto pos = read_haffman_tree_from_file(file_path);
   pos      = read_file_tree_from_file(file_path, pos);
   decompress_file(file_path, pos);
-}
+} /*
+C:\Users\30408\Desktop\英语\2023年06月大学英语4级真题与解析(全三套).ipp
+C:\Users\30408\Desktop\英语\2023年06月大学英语4级真题与解析(全三套)
+*/
