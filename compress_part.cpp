@@ -40,9 +40,11 @@ void Haffman_tree::write_file_tree_to_file(std::filesystem::path const& file_pat
 std::unordered_map<unsigned char, uint64_t> Haffman_tree::asynchronous_statistics(
     std::filesystem::path const& file_path) {
   std::unordered_map<unsigned char, uint64_t> one_map;
-  auto buff = read_origin_file(file_path);
-  for (auto ch : buff) {
+  auto buff = read_and_trunk_origin_file(file_path);
+  for (auto const&vec : buff) {
+    for(auto ch:vec) {
     one_map[ch]++;
+}
   }
   return one_map;
 }
@@ -147,7 +149,7 @@ void Haffman_tree::write_trunked_code_to_file(std::filesystem::path const& file_
                                               std::pair<uint8_t, std::vector<unsigned char>> const& code_pair) {
   auto code    = code_pair.second;
   auto ava_bit = code_pair.first;
-  std::ofstream ofile(file_path, std::ios::binary | std::ios::ate);
+  std::fstream ofile(file_path, std::ios::binary | std::ios::in|std::ios::out);
   //  std::ofstream test_ofile("C:\\Users\\30408\\Desktop\\英语\\压缩时写文件输出.txt", std::ios::app);
   ofile.seekp(offset, std::ios::beg);
   if ((size_t)ofile.tellp() != offset) {

@@ -77,6 +77,9 @@ std::streampos Haffman_tree::decode_single_file(std::filesystem::path const& rea
   std::vector<size_t> offset;
   ifile.read(reinterpret_cast<char*>(&thread_num), sizeof(uint8_t));
   std::cout << "thread_num:" << (int)thread_num << ' ';
+  if (thread_num > max_thread_num) {
+    throw std::runtime_error("read too much threads");
+  }
   code_size.resize(thread_num);
   offset.resize(thread_num);
   for (size_t i = 0; i < thread_num; i++) {
@@ -256,4 +259,6 @@ void Haffman_tree::decompress_file(std::filesystem::path const& file_path) {
 } /*
 C:\Users\30408\Desktop\英语\2023年06月大学英语4级真题与解析(全三套).ipp
 C:\Users\30408\Desktop\英语\2023年06月大学英语4级真题与解析(全三套)
+C:\Users\30408\Desktop\测试文件夹
+C:\Users\30408\Desktop\测试文件夹.ipp
 */
